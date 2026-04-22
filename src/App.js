@@ -163,7 +163,7 @@ const FormNovoProduto = ({ onSave, onCancel }) => {
         {myUrl && platform !== "other" && (
           <div style={{ fontSize: 12, color: "#999" }}>
             Plataforma: <span style={{ color: PLT[platform]?.color, fontWeight: 700 }}>{PLT[platform]?.name}</span>
-            {" · "}<a href={myUrl} target="_blank" rel="noreferrer" style={{ color: ACCENT, fontSize: 11 }}>ver anuncio ↗</a>
+            {" · "}<span onClick={e => { e.stopPropagation(); window.open(myUrl, "_blank"); }} style={{ color: ACCENT, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>ver anuncio ↗</span>
           </div>
         )}
 
@@ -401,14 +401,32 @@ export default function App() {
   const analyze = useCallback(async (product) => {
     setAiLoading(true); setAiText("");
     try {
-      const compData = (product.competitors || []).map(c => ({ plataforma: PLT[c.platform]?.name || c.platform, precoAtual: c.currentPrice, min30d: Math.min(...(c.history || [{ price: c.currentPrice }]).map(h => h.price)), max30d: Math.max(...(c.history || [{ price: c.currentPrice }]).map(h => h.price)), tendencia: (c.history || []).length > 7 ? (c.history[c.history.length - 1].price > c.history[c.history.length - 7].price ? "alta" : "queda") : "estavel" }));
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 700, system: "Especialista em precificacao para marketplaces brasileiros. Respostas diretas em portugues com bullet points.", messages: [{ role: "user", content: `Produto: "${product.name}"\nMeu preco: R$ ${product.myPrice?.toFixed(2)}\nConcorrentes:\n${compData.map(c => `- ${c.plataforma}: R$ ${c.precoAtual?.toFixed(2)} | min: R$ ${c.min30d?.toFixed(2)} | max: R$ ${c.max30d?.toFixed(2)} | tendencia: ${c.tendencia}`).join("\n")}\nAnalise: 1) Posicao competitiva 2) Acao imediata 3) Preco sugerido` }] }),
+      const compData = (product.competitors || []).map(c => ({
+        plataforma: PLT[c.platform]?.name || c.platform,
+        precoAtual: c.currentPrice,
+        min30d: Math.min(...(c.history || [{ price: c.currentPrice }]).map(h => h.price)),
+        max30d: Math.max(...(c.history || [{ price: c.currentPrice }]).map(h => h.price)),
+        tendencia: (c.history || []).length > 7
+          ? (c.history[c.history.length-1].price > c.history[c.history.length-7].price ? "alta" : "queda")
+          : "estavel",
+        loja: c.seller || "",
+      }));
+      const res = await fetch(SCRAPER_URL + "/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          produto: product.name,
+          meuPreco: product.myPrice,
+          concorrentes: compData,
+        }),
       });
       const data = await res.json();
-      setAiText(data.content[0].text);
-    } catch { setAiText("Erro ao conectar com a IA."); }
+      if (data.analysis) {
+        setAiText(data.analysis);
+      } else {
+        setAiText("Nao foi possivel analisar. Tente novamente.");
+      }
+    } catch { setAiText("Erro ao conectar com o servidor de analise. Verifique se o Railway esta online."); }
     setAiLoading(false);
   }, []);
 
@@ -492,7 +510,7 @@ export default function App() {
               {product.sku && product.sku !== "-" && <span>SKU: {product.sku}</span>}
               {product.seller && <span>Loja: <span style={{ color: ACCENT, fontWeight: 600 }}>{product.seller}</span></span>}
               <span>Meu preco: <span style={{ ...mono, color: ACCENT, fontWeight: 700 }}>{fmt(product.myPrice)}</span></span>
-              {product.myUrl && <a href={product.myUrl} target="_blank" rel="noreferrer" style={{ color: ACCENT, fontSize: 11 }}>ver meu anuncio ↗</a>}
+              {product.myUrl && <span onClick={e => { e.stopPropagation(); window.open(product.myUrl, "_blank"); }} style={{ color: ACCENT, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>ver meu anuncio ↗</span>}
             </div>
           </div>
           <button onClick={() => analyze(product)} style={{ ...btnStyle("primary"), opacity: aiLoading ? 0.7 : 1 }} disabled={aiLoading}>{aiLoading ? "Analisando..." : "Analise com IA"}</button>
@@ -524,7 +542,7 @@ export default function App() {
                   <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", gap: 8 }}><PlatformBadge platform={comp.platform} /> {PLT[comp.platform]?.name}</div>
                   <div style={{ fontSize: 11, color: "#999", marginTop: 3 }}>{comp.title}</div>
                   {comp.seller && <div style={{ fontSize: 11, color: "#777", marginTop: 2 }}>Loja: <span style={{ color: ACCENT }}>{comp.seller}</span></div>}
-                  {comp.url && <a href={comp.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: ACCENT }}>ver anuncio ↗</a>}
+                  {comp.url && <span onClick={e => { e.stopPropagation(); window.open(comp.url, "_blank"); }} style={{ fontSize: 11, color: ACCENT, cursor: "pointer", textDecoration: "underline" }}>ver anuncio ↗</span>}
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ ...mono, fontSize: 22, fontWeight: 700, color: isAlert ? "#f97316" : "#22c55e" }}>{fmt(comp.currentPrice)}</div>
@@ -594,8 +612,8 @@ export default function App() {
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <Dot ok={!alerts.length} />
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{p.name}</div>
-                  <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>{p.sku} · {cs.length} concorrente{cs.length !== 1 ? "s" : ""}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                  <div style={{ fontSize: 12, color: "#999", marginTop: 2 }}>{p.sku !== "-" ? p.sku + " · " : ""}{cs.length} concorrente{cs.length !== 1 ? "s" : ""}{p.seller ? " · " + p.seller : ""}</div>
                 </div>
                 <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>{cs.map(c => <PlatformBadge key={c.id} platform={c.platform} />)}</div>
                 <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -652,12 +670,9 @@ export default function App() {
   return (
     <div style={{ fontFamily: "system-ui,-apple-system,sans-serif", background: "#09090b", minHeight: "100vh", color: "#e8e6e1" }}>
       <div style={{ padding: "0 24px", borderBottom: "1px solid #1e1e24", display: "flex", alignItems: "center", gap: 20, height: 58, background: "#09090b", position: "sticky", top: 0, zIndex: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <img src={LOGO} alt="E-CLICK" style={{ height: 30, objectFit: "contain" }} />
-          <div style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
-            <span style={{ ...mono, fontWeight: 700, fontSize: 14, color: ACCENT, letterSpacing: "1px" }}>E-CLICK</span>
-            <span style={{ fontSize: 9, color: "#888", letterSpacing: "3px", textTransform: "uppercase" }}>PriceWatch</span>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <img src={LOGO} alt="E-CLICK" style={{ height: 32, objectFit: "contain" }} />
+          <span style={{ fontSize: 9, color: "#666", letterSpacing: "3px", textTransform: "uppercase" }}>PriceWatch</span>
         </div>
         <div style={{ display: "flex", gap: 4 }}>
           {[["dashboard","Dashboard"],["products","Produtos"],["alerts","Alertas" + (allAlerts.length > 0 ? " (" + allAlerts.length + ")" : "")]].map(([id, label]) => (
@@ -665,8 +680,8 @@ export default function App() {
           ))}
         </div>
         <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 11, color: "#333", display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block" }} /> Firebase
+        <div style={{ fontSize: 11, color: "#666", display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22c55e", display: "inline-block", boxShadow: "0 0 6px #22c55e88" }} /> Firebase
         </div>
         <button onClick={refresh} style={{ ...btnStyle("primary"), opacity: refreshing ? 0.7 : 1 }} disabled={refreshing}>{refreshing ? "Atualizando..." : "Atualizar precos"}</button>
       </div>
