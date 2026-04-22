@@ -95,7 +95,11 @@ const FormNovoProduto = ({ onSave, onCancel }) => {
         if (data.title && !name) setName(data.title);
         if (data.price && !price) setPrice(data.price.toFixed(2).replace(".", ","));
         if (data.seller) setSeller(data.seller);
-        setFetchMsg("Dados preenchidos automaticamente!");
+        if (data.partial) {
+          setFetchMsg(data.warning || "Titulo encontrado! Preencha o preco manualmente.");
+        } else {
+          setFetchMsg("Dados preenchidos automaticamente!");
+        }
       } else {
         setFetchMsg("Nao foi possivel buscar. Preencha manualmente.");
       }
@@ -226,7 +230,11 @@ const FormNovoConcorrente = ({ onSave, onCancel }) => {
         setTitle(data.title || "");
         setPrice(data.price ? data.price.toFixed(2).replace(".", ",") : "");
         if (data.seller) setSeller(data.seller);
-        setFetchMsg("Dados carregados automaticamente!");
+        if (data.partial) {
+          setFetchMsg(data.warning || "Titulo encontrado! Preencha o preco manualmente.");
+        } else {
+          setFetchMsg("Titulo e preco preenchidos automaticamente!");
+        }
       } else {
         setFetchMsg("Nao foi possivel buscar automaticamente. Preencha manualmente.");
       }
